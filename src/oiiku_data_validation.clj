@@ -50,41 +50,61 @@
           (if (not (empty? errors-map))
             {:attrs {attr (assoc errors-map :_type :record-list-errors)}}))))))
 
+(defn- call-error-fn
+  "Assumes err-fn is a String if it's not a function."
+  [err-fn & args]
+  (if (fn? err-fn)
+    (apply err-fn args)
+    err-fn))
+
 (defn validate-non-empty-string
-  [attr]
-  (fn [data]
-    (if-let [value (attr data)]
-      (if (or (not (= (class value) String))
-              (empty? (.trim value)))
-        (attr-err attr "must contain something other than blank spaces"))
-      (attr-err attr "must be non-nil"))))
+  ([attr] (validate-non-empty-string
+           attr
+           "must be non-nil"
+           "must contain something other than blank spaces"))
+  ([attr nil-err-fn blank-err-fn]
+     (fn [data]
+       (if-let [value (attr data)]
+         (if (or (not (= (class value) String))
+                 (empty? (.trim value)))
+           (attr-err attr (call-error-fn blank-err-fn)))
+         (attr-err attr (call-error-fn nil-err-fn))))))
 
 (defn validate-presence
-  [attr]
-  (fn [data]
-    (if (not (contains? data attr))
-      (attr-err attr "must be set"))))
+  ([attr] (validate-presence attr "must be set"))
+  ([attr error-fn]
+     (fn [data]
+       (if (not (contains? data attr))
+         (attr-err attr (call-error-fn error-fn))))))
 
 (defn- humanized-list
   [list]
   (apply str (interpose ", " list)))
 
 (defn validate-only-accept
-  [& attrs]
-  (let [attrs (set attrs)]
-    (fn [data]
-      (let [provided-attrs (set (keys data))
-            extraneous-attrs (clojure.set/difference provided-attrs attrs)]
-        (if (not (empty? extraneous-attrs))
-          (base-err (str "Unknown attributes: "
-                         (humanized-list (map name extraneous-attrs)))))))))
+  ([attrs] (validate-only-accept
+            attrs
+            (fn [extraneous-attrs]
+              (str "Unknown attributes: "
+                   (humanized-list (map name extraneous-attrs))))))
+  ([attrs error-fn]
+     (let [attrs (set attrs)]
+       (fn [data]
+         (let [provided-attrs (set (keys data))
+               extraneous-attrs (clojure.set/difference provided-attrs attrs)]
+           (if (not (empty? extraneous-attrs))
+             (base-err (call-error-fn error-fn extraneous-attrs))))))))
 
 (defn validate-inclusion
-  [attr accepted-values]
-  (fn [data]
-    (if-let [value (data attr)]
-      (if (not (contains? accepted-values value))
-        (attr-err attr (str"must be any of " (humanized-list accepted-values)))))))
+  ([attr accepted-values] (validate-inclusion
+                           attr accepted-values
+                           (fn [accepted-values]
+                             (str "must be any of " (humanized-list accepted-values)))))
+  ([attr accepted-values error-fn]
+     (fn [data]
+       (if-let [value (data attr)]
+         (if (not (contains? accepted-values value))
+           (attr-err attr (call-error-fn error-fn accepted-values)))))))
 
 (defn- merge-base-errors
   [result error]
