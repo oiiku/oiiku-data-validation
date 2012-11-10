@@ -35,21 +35,39 @@ In some clojure version, IIRC 1.2, keywords are garbage collected, so it's safe 
 
 In all cases you can replace the custom error message function with a string and that will be used as the error, incases where you don't need validation execution pecific data to be present in the error message.
 
-### `(v/validate-presence :some-attr (fn [] "custom err msg"))`
+### `v/validate-presence`
+
+    (v/validate-presence
+     :some-attr
+     (fn [] "custom err msg"))`
 
 Passes if the data map contains the specified key.
 
-### `(v/validate-non-empty-string :some-attr (fn [] "is nil msg") (fn [] "is not string msg"))`
+### `v/validate-non-empty-string`
+
+    (v/validate-non-empty-string
+     :some-attr
+     (fn [] "is nil msg")
+     (fn [] "is not string msg"))
 
 Passes if the data is non-nil and a string longer than zero.
 
-### `(v/validate-only-accept [:some-attr :some-other-attr] (fn [extraneous-attrs] "custom err msg"))`
+### `v/validate-only-accept`
+
+    (v/validate-only-accept
+     [:some-attr :some-other-attr]
+     (fn [extraneous-attrs] "custom err msg"))
 
 Passes if the map only contains the specified list of keys. In the example above, `{:some-attr "foo"}` and `{:some-attr "foo" :some-other-attr "bar"}` is valid. `{:blargh-attr "foo"}` and `{:some-attr "foo" :cake "bar"}` is invalid.
 
 The error message function is passed a set of the attributes that was present and not accepted.
 
-### `(v/validate-inclusion :some-attr ["list of", "accepted values"] (fn [accepted-values] "err msg"))`
+### `v/validate-inclusion`
+
+    (v/validate-inclusion
+     :some-attr
+     ["list of", "accepted values"]
+     (fn [accepted-values] "err msg"))
 
 Passes if the specified attr is exactly the value of one of the items in the list.
 
