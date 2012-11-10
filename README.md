@@ -1,68 +1,136 @@
-# oiiku-mongodb
+# oiiku-data-validation
 
-Warning: not battle proven! This is a very early preview release.
+oiiku-data-validation is a Clojure library to validate data.
 
-A small wrapper on top of the Monger MongoDB library, for working with MongoDB from Clojure apps.
-
-Open sourced it after someone on the Clojure IRC channel wanted to see it. It's not currently in release quality (lack of documentation etc).
-
-# Why it exists
-
-It allows for the creation of "models". Essentially, this library consists of a bunch of functions that takes a collection name and some options like validation function etc, and returns a new functoin that you actually use to work with MongoDB. This allows for the cration of models. See separate section on models.
-
-It also makes database operations completely functional, instead of using a hidden internal singleton to store it.
-
-## Connecting
-
-We don't use the global singleton of the underlying library. You need to create a connection and pass it to all database operations.
-
-    (def db (oiiku-mongodb.db/create-db "name-of-database"))
-
-It's up to you to make this connection available so that you can pass it to your queries.
-
-We prefer a functional system that easily allows us to have multiple instances of our application in one process, for example. The default singleton of Monger makes that a bit cumbersome.
-
-## Models
-
-Models are modular. Here's an example of how to make a "model".
-
-    (ns myapp.models.user
-      (:require [oiiku-mongodb.db :as db]))
-    
-    (def insert (db/make-insert users" validator-fn-here))
-    (def find-one (db/make/find-one "users"))
-
-The function `make-insert` returns a new function that takes two arguments: the database to work on (see previous section) and the data to insert. It will return `[true the-data]` if it is successfully inserted, and `[false validation-errors]` if not.
-
-TODO: Document all the functions.
-
-See more about validators below.
-
-
-## Validation
-
-A toolkit for mixing smaller validation functions into an actual model validation function exists.
-
-TODO: Make this a separate package, the validation system is a generic data-in/data-out package.
+## Basic usage
 
     (require [oiiku-mongodb.validator :as v])
-    
+
     (def validator
       (v/validator
         (v/validate-presence :username)
         (v/validate-presence :password)
         (fn [data]
-          {:base ["An error message for the entire record"]}
+          {:base ["An arbitrary function returning error message for the entire record"]}
         (fn [data]
-          {:attr {:some-attr ["An error message for a specific attribute]}})))
+          {:attr {:some-attr ["An arbitrary function returning an error message for a specific attribute]}})))
 
-Validator functions can be any function, it does not have to be a `v/validator`. The only thing it needs to do is
+## A note on strings vs keywords in maps
 
-1. Take one argument, the data that is about to be inserted.
-2. Return an object of the type `{:attr {:some-attr ["errors on this attr"] :base ["Top-level error."]}}`.
+This library only supports maps where the keys are keywords.
 
-Errors on `:attr` are supposed to be for specific attribues (example: "cannot be blank"). Errors on `:base` is a list of top-level errors for no specific attribute (example: "Quota exceeded").
+In some cases where you have multiple data sources, like JSON parsing and a document database, you'll have maps with strings as keys and others with keywords as keys. This is a messy situation, and this library does not try to do anything to mitigate it. In all cases it does `(attr some-map)` for lookup, which will only work for keywords anyways.
 
-It's important that you always follow this format. It's expected, and no internal validation is provided to ensure you are following it. If you don't follow it, you'll get undefined behaviour. For example, you have to always provide a list
+Cheshire can parse to keywords, `(cheshire.core/parse-string json-string true`).
 
-You can also nest these if you have nested data structures, in the form of `{:attr {:some-attr {:base ["Quota exceeded"] :attr {:foo ["has a nested error :("]}}}}`.
+In some clojure version, IIRC 1.2, keywords are garbage collected, so it's safe to turn user input into keywords.
+
+## Built-in validators
+
+In all cases you can replace the custom error message function with a string and that will be used as the error, incases where you don't need validation execution pecific data to be present in the error message.
+
+### `(v/validate-presence :some-attr (fn [] "custom err msg"))`
+
+Passes if the data map contains the specified key.
+
+### `(v/validate-non-empty-string :some-attr (fn [] "is nil msg") (fn [] "is not string msg"))`
+
+Passes if the data is non-nil and a string longer than zero.
+
+### `(v/validate-only-accept [:some-attr :some-other-attr] (fn [extraneous-attrs] "custom err msg"))`
+
+Passes if the map only contains the specified list of keys. In the example above, `{:some-attr "foo"}` and `{:some-attr "foo" :some-other-attr "bar"}` is valid. `{:blargh-attr "foo"}` and `{:some-attr "foo" :cake "bar"}` is invalid.
+
+The error message function is passed a set of the attributes that was present and not accepted.
+
+### `(v/validate-inclusion :some-attr ["list of", "accepted values"] (fn [accepted-values] "err msg"))`
+
+Passes if the specified attr is exactly the value of one of the items in the list.
+
+## Chaining validators
+
+You can chain validators so that the second only executes if the first one returns no error, and so on.
+
+    (v/chain
+      (v/validate-presence :username)
+      (fn [data]
+        ;; Do something that requires (:username data) to be non-nil
+        ;; Won't run if validate-presence returns an error
+        ))
+
+Note that you are completely free to implement your own chaining if you so wish.
+
+## Nested data
+
+You can create validators that only operates on a subset of the data.
+
+    (v/validator
+      (v/validate-presence :username)
+      (v/validate-record
+        :some-field
+        (v/validator
+          (v/validate-presence :nested-stuff))))
+
+This is useful for validating structures like this:
+
+    {:username "Foo", :some-field {:nested-stuff "stuff here"}}
+
+The validator `some-validator` can be any validator, such as `(validate-presence :foo)` or `(v/validate ....)`.
+
+The data passed to the validators will be (:some-field full-data).
+
+The errors returned by the validator will be added in full to the attribute in question.
+
+    {:attr {:some-field {:base ["Errors on base"], :attr {:some-attr ["some err"]}}}}
+
+
+## Lists
+
+You can create validators that operates on lists of data.
+
+    (v/validator
+      (v/validate-presence :username)
+      (v/validate-record-list
+        :thingies
+        (v/validator
+          (v/validate-presence :foo))))
+
+This is useful for validating structures like this:
+
+    {:username "Foo", :thingies [{:foo "123"}, {:foo "456"}]}
+
+The errors returned looks like this, where the key in the map is the index of the item in the provided list.
+
+    {:attr {:thingies {2 {:attr {:foo ["is required"]}}}}}
+
+An error will be returned when the data is _not_ a list. The error messages you get here is currently not configurable, which sucks, file new issues like mad until we fix that.
+
+## Impromptu validators based on incoming data
+
+TODO: Implement this. Useful in document databases where documents needs to be validated based on some schema specification in another document, or whatever
+
+## Passing extra data to validations
+
+TODO: Learn monads (I think) and implement this
+
+## Creating your own validator functions
+
+A validator function is a function that takes the provided data and returns null, or a map of errors.
+
+The map of errors must look like the following:
+
+    {:base ["A list of", "Error messages"]}
+    {:attrs {:username ["Already exists"]}}
+    {:attrs {:username ["Already exists"]} :base ["An unknown error occurred (db exception)"]}
+
+You are free to screw this up, but the library won't do any validation to help you out. So make sure your validators returns a correct map to avoid wacko errors.
+
+## Separation of top-level errors and attribute specific errors
+
+If you're creating a new user and want to return the error "quota exceeded", which attribute should you put that error message on?
+
+The answer is no attribute. This is solved by oiiku-data-validation since it separates top-level base errors and attribute specific errors.
+
+    {:base ["quota exceeded"], :attr {:email ["must contain an @"]}}
+
+By completely separating :base and :attr you are free to have an attribute called `:base` without fear of conflicts.
