@@ -1,5 +1,5 @@
-(ns oiiku-mongodb.test.validator-builtins
-  (:require [oiiku-mongodb.validator :as v])
+(ns oiiku-data-validation.validator-builtins-test
+  (:require [oiiku-data-validation :as v])
   (:use [clojure.test]))
 
 (deftest validate-non-empty-string

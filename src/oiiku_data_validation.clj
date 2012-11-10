@@ -1,4 +1,4 @@
-(ns oiiku-mongodb.validator
+(ns oiiku-data-validation
   (:require clojure.set))
 
 (defn attr-err

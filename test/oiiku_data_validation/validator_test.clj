@@ -1,5 +1,5 @@
-(ns oiiku-mongodb.test.validator
-  (:require [oiiku-mongodb.validator :as v])
+(ns oiiku-data-validation.validator-test
+  (:require [oiiku-data-validation :as v])
   (:use [clojure.test]))
 
 (deftest single-validator-not-returning-any-error
