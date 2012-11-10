@@ -2,6 +2,12 @@
 
 oiiku-data-validation is a Clojure library to validate data.
 
+## Getting
+
+It's deployed to clojars. Add this to your Leiningen `:dependencies`:
+
+    [oiiku-data-validation "0.1.0"]
+
 ## Basic usage
 
     (require [oiiku-mongodb.validator :as v])
