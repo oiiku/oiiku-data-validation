@@ -101,4 +101,30 @@
                    (fn [data] (v/attr-err :auth-tokens "blew up")))]
     (is (= (validator {:auth-tokens [{}]})
            {:attrs {:auth-tokens {:base ["will blow up" "blew up"]
-                                 :attrs {0 {:attrs {:token ["is too short"]}}}}}}))))
+                                  :attrs {0 {:attrs {:token ["is too short"]}}}}}}))))
+
+(deftest passing-extra-data
+  (let [extra-stuff-validator (fn [data extra-stuff]
+                                (if (not= (:extras data) (:extras extra-stuff))
+                                  {:attrs {:extras ["an error"]}}))
+        auth-token-validator (v/validator
+                              extra-stuff-validator)
+        dynamic-attrs-validator (v/validator
+                                 extra-stuff-validator)
+        validator (v/validator
+                   extra-stuff-validator
+                   (v/validate-record :dynamic-attrs dynamic-attrs-validator)
+                   (v/validate-record-list :auth-tokens auth-token-validator))
+        some-data {:extras 123
+                   :dynamic-attrs {:extras 123}
+                   :auth-tokens [{:extras 123}]}]
+    (is (nil? (validator some-data {:extras 123})))
+    (is (= (get-in (validator some-data {:extras 456})
+                   [:attrs :auth-tokens 0 :attrs :extras 0])
+           "an error"))
+    (is (= (get-in (validator some-data {:extras 456})
+                   [:attrs :dynamic-attrs :attrs :extras 0])
+           "an error"))
+    (is (= (get-in (validator some-data {:extras 456})
+                   [:attrs :extras 0])
+           "an error"))))

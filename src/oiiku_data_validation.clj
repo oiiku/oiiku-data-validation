@@ -11,14 +11,14 @@
 
 (defn chain
   [& validators]
-  (fn [data]
-    (some #(% data) validators)))
+  (fn [& args]
+    (some #(apply % args) validators)))
 
 (defn validate-record
   [attr validator]
-  (fn [data]
+  (fn [data & args]
     (if-let [record (attr data)]
-      (if-let [errors (validator record)]
+      (if-let [errors (apply (partial validator record) args)]
         {:attrs {attr (assoc errors :_type :record-errors)}}))))
 
 (defn- map-without-values
@@ -36,14 +36,14 @@
 
 (defn validate-record-list
   [attr validator]
-  (fn [data]
+  (fn [data & args]
     (if-let [records (attr data)]
       (if (and (sequential? records)
                (not (empty? records)))
         (let [all-errors-map
               (reduce
                (fn [result idx]
-                 (assoc result idx (validator (nth records idx))))
+                 (assoc result idx (apply (partial validator (nth records idx)) args)))
                {}
                (range (count records)))
               errors-map (map-without-values #(not (nil? %)) all-errors-map)]
@@ -63,7 +63,7 @@
            "must be non-nil"
            "must contain something other than blank spaces"))
   ([attr nil-err-fn blank-err-fn]
-     (fn [data]
+     (fn [data & args]
        (if-let [value (attr data)]
          (if (or (not (= (class value) String))
                  (empty? (.trim value)))
@@ -73,7 +73,7 @@
 (defn validate-presence
   ([attr] (validate-presence attr "must be set"))
   ([attr error-fn]
-     (fn [data]
+     (fn [data & args]
        (if (not (contains? data attr))
          (attr-err attr (call-error-fn error-fn))))))
 
@@ -89,7 +89,7 @@
                    (humanized-list (map name extraneous-attrs))))))
   ([attrs error-fn]
      (let [attrs (set attrs)]
-       (fn [data]
+       (fn [data & args]
          (let [provided-attrs (set (keys data))
                extraneous-attrs (clojure.set/difference provided-attrs attrs)]
            (if (not (empty? extraneous-attrs))
@@ -101,7 +101,7 @@
                            (fn [accepted-values]
                              (str "must be any of " (humanized-list accepted-values)))))
   ([attr accepted-values error-fn]
-     (fn [data]
+     (fn [data & args]
        (if-let [value (data attr)]
          (if (not (contains? accepted-values value))
            (attr-err attr (call-error-fn error-fn accepted-values)))))))
@@ -142,7 +142,7 @@
 (defn validator
   "Creates a new validator."
   [& validators]
-  (fn [data]
-    (let [errors (remove nil? (map #(% data) validators))]
+  (fn [& args]
+    (let [errors (remove nil? (map #(apply % args) validators))]
       (if (> (count errors) 0)
         (reduce merge-error errors)))))
