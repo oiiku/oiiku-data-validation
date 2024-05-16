@@ -1,4 +1,4 @@
-(defproject oiiku-data-validation "0.2.0"
+(defproject oiiku-data-validation "0.2.1-SNAPSHOT"
   :description "Data validation library"
   :url "https://github.com/oiiku/oiiku-data-validation"
   :license {:name "New BSD license"}
