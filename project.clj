@@ -7,4 +7,13 @@
   {"github/oiiku-data-validation"
    {:url "https://maven.pkg.github.com/oiiku/oiiku-data-validation"
     :username [:gpg :env/repo_username]
-    :password [:gpg :env/repo_password]}})
+    :password [:gpg :env/repo_password]}}
+
+  ;; Library deployment
+  :deploy-repositories
+  {"releases"  {:url      "https://maven.pkg.github.com/oiiku/oiiku-data-validation"
+                :username [:gpg :env/repo_username]
+                :password [:gpg :env/repo_password]}
+   "snapshots" {:url      "https://maven.pkg.github.com/oiiku/oiiku-data-validation"
+                :username [:gpg :env/repo_username]
+                :password [:gpg :env/repo_password]}})
